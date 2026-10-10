@@ -72,3 +72,46 @@ test('edit page lists only ticket types of that event', function () {
         ->assertSee('早割')
         ->assertDontSee('別イベント券');
 });
+
+test('organizer can delete a ticket type of their event', function () {
+    $ticketType = TicketType::factory()->create(['name' => '早割']);
+    $this->actingAs($ticketType->event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $ticketType->event])
+        ->call('deleteTicketType', $ticketType->id)
+        ->assertDontSee('早割');
+
+    expect(TicketType::count())->toBe(0);
+});
+
+test('ticket type of another event cannot be deleted from this edit page', function () {
+    $event = Event::factory()->create();
+    $otherTicketType = TicketType::factory()->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('deleteTicketType', $otherTicketType->id)
+        ->assertNotFound();
+
+    expect(TicketType::count())->toBe(1);
+});
+
+test('only the organizer is allowed by the ticket type delete policy', function () {
+    $ticketType = TicketType::factory()->create();
+
+    expect($ticketType->event->user->can('delete', $ticketType))->toBeTrue()
+        ->and(User::factory()->create()->can('delete', $ticketType))->toBeFalse();
+});
+
+test('event list shows the lowest ticket price', function (array $prices, string $expected) {
+    $event = Event::factory()->create();
+    foreach ($prices as $price) {
+        TicketType::factory()->for($event)->create(['price' => $price]);
+    }
+
+    Livewire::test('pages::events.index')->assertSee($expected);
+})->with([
+    'lowest price is shown with a tilde' => [[3000, 1500], '1,500円〜'],
+    'free when the lowest price is 0' => [[0, 2000], '無料'],
+    'dash when there are no ticket types' => [[], '─'],
+]);

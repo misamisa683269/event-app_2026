@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, TicketType> $ticketTypes
+ * @property-read int|string|null $ticket_types_min_price
  */
 #[Fillable(['user_id', 'title', 'description', 'venue', 'starts_at', 'ends_at'])]
 class Event extends Model
@@ -58,6 +59,24 @@ class Event extends Model
     public function ticketTypes(): HasMany
     {
         return $this->hasMany(TicketType::class);
+    }
+
+    /**
+     * 一覧に出す価格表示。`withMin('ticketTypes', 'price')` で取得した最安値を使う。
+     */
+    public function lowestPriceLabel(): string
+    {
+        $lowestPrice = $this->ticket_types_min_price;
+
+        if ($lowestPrice === null) {
+            return '─';
+        }
+
+        if ((int) $lowestPrice === 0) {
+            return '無料';
+        }
+
+        return number_format((int) $lowestPrice).'円〜';
     }
 
     /**

@@ -84,6 +84,15 @@ new #[Title('イベントを編集')] class extends Component {
         unset($this->ticketTypes);
     }
 
+    public function deleteTicketType(int $ticketTypeId): void
+    {
+        $ticketType = $this->event->ticketTypes()->findOrFail($ticketTypeId);
+        $this->authorize('delete', $ticketType);
+
+        $ticketType->delete();
+        unset($this->ticketTypes);
+    }
+
     public function delete(): void
     {
         abort_unless($this->event->isOwnedBy(auth()->user()), 403);
@@ -134,6 +143,7 @@ new #[Title('イベントを編集')] class extends Component {
                             <th class="px-4 py-2 font-medium">名前</th>
                             <th class="px-4 py-2 text-right font-medium">価格</th>
                             <th class="px-4 py-2 text-right font-medium">定員</th>
+                            <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
@@ -142,6 +152,11 @@ new #[Title('イベントを編集')] class extends Component {
                                 <td class="px-4 py-2">{{ $ticketType->name }}</td>
                                 <td class="px-4 py-2 text-right">{{ number_format($ticketType->price) }}円</td>
                                 <td class="px-4 py-2 text-right">{{ number_format($ticketType->capacity) }}名</td>
+                                <td class="px-4 py-2 text-right">
+                                    <flux:button wire:click="deleteTicketType({{ $ticketType->id }})"
+                                        wire:confirm="この券種を削除しますか？" variant="danger" size="sm"
+                                        icon="trash">削除</flux:button>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>
