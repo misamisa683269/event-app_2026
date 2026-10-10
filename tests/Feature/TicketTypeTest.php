@@ -103,6 +103,69 @@ test('only the organizer is allowed by the ticket type delete policy', function 
         ->and(User::factory()->create()->can('delete', $ticketType))->toBeFalse();
 });
 
+test('ticket type limits accept boundary values', function (array $input) {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->set(array_merge(['ticketName' => '一般', 'ticketPrice' => '1000', 'ticketCapacity' => '10'], $input))
+        ->call('addTicketType')
+        ->assertHasNoErrors();
+
+    expect(TicketType::count())->toBe(1);
+})->with([
+    'price at 1,000,000' => [['ticketPrice' => '1000000']],
+    'capacity at 10,000' => [['ticketCapacity' => '10000']],
+    'name at 50 characters' => [['ticketName' => str_repeat('あ', 50)]],
+]);
+
+test('ticket type limits reject values over the boundary and non-numeric input', function (array $input, string $errorField) {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->set(array_merge(['ticketName' => '一般', 'ticketPrice' => '1000', 'ticketCapacity' => '10'], $input))
+        ->call('addTicketType')
+        ->assertHasErrors($errorField);
+
+    expect(TicketType::count())->toBe(0);
+})->with([
+    'price over 1,000,000' => [['ticketPrice' => '1000001'], 'ticketPrice'],
+    'capacity over 10,000' => [['ticketCapacity' => '10001'], 'ticketCapacity'],
+    'name over 50 characters' => [['ticketName' => str_repeat('あ', 51)], 'ticketName'],
+    'price is not numeric' => [['ticketPrice' => 'abc'], 'ticketPrice'],
+    'capacity is not numeric' => [['ticketCapacity' => 'abc'], 'ticketCapacity'],
+    'price is required' => [['ticketPrice' => ''], 'ticketPrice'],
+    'capacity is required' => [['ticketCapacity' => ''], 'ticketCapacity'],
+]);
+
+test('other users get 403 and cannot add a ticket type by calling addTicketType directly', function () {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    $component = Livewire::test('pages::events.edit', ['event' => $event])
+        ->set(['ticketName' => '一般', 'ticketPrice' => '1000', 'ticketCapacity' => '10']);
+
+    $this->actingAs(User::factory()->create());
+
+    $component->call('addTicketType')->assertForbidden();
+
+    expect(TicketType::count())->toBe(0);
+});
+
+test('other users get 403 and cannot delete a ticket type by calling deleteTicketType directly', function () {
+    $ticketType = TicketType::factory()->create();
+    $this->actingAs($ticketType->event->user);
+
+    $component = Livewire::test('pages::events.edit', ['event' => $ticketType->event]);
+
+    $this->actingAs(User::factory()->create());
+
+    $component->call('deleteTicketType', $ticketType->id)->assertForbidden();
+
+    expect(TicketType::count())->toBe(1);
+});
+
 test('event list shows the lowest ticket price', function (array $prices, string $expected) {
     $event = Event::factory()->create();
     foreach ($prices as $price) {
