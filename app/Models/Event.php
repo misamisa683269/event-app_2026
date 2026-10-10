@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Database\Factories\EventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -19,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $ends_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read Collection<int, TicketType> $ticketTypes
  */
 #[Fillable(['user_id', 'title', 'description', 'venue', 'starts_at', 'ends_at'])]
 class Event extends Model
@@ -45,6 +48,16 @@ class Event extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * このイベントの券種。
+     *
+     * @return HasMany<TicketType, $this>
+     */
+    public function ticketTypes(): HasMany
+    {
+        return $this->hasMany(TicketType::class);
     }
 
     /**

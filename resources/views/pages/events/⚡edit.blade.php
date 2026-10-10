@@ -1,6 +1,9 @@
 <?php
 
 use App\Models\Event;
+use App\Models\TicketType;
+use Illuminate\Database\Eloquent\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
@@ -44,6 +47,43 @@ new #[Title('イベントを編集')] class extends Component {
         $this->redirectRoute('events.index', navigate: true);
     }
 
+    public string $ticketName = '';
+
+    public string $ticketPrice = '';
+
+    public string $ticketCapacity = '';
+
+    /**
+     * このイベントの券種一覧。
+     *
+     * @return Collection<int, TicketType>
+     */
+    #[Computed]
+    public function ticketTypes(): Collection
+    {
+        return $this->event->ticketTypes()->orderBy('id')->get();
+    }
+
+    public function addTicketType(): void
+    {
+        abort_unless($this->event->isOwnedBy(auth()->user()), 403);
+
+        $validated = $this->validate([
+            'ticketName' => 'required|string|max:50',
+            'ticketPrice' => 'required|integer|min:0|max:1000000',
+            'ticketCapacity' => 'required|integer|min:1|max:10000',
+        ]);
+
+        $this->event->ticketTypes()->create([
+            'name' => $validated['ticketName'],
+            'price' => (int) $validated['ticketPrice'],
+            'capacity' => (int) $validated['ticketCapacity'],
+        ]);
+
+        $this->reset('ticketName', 'ticketPrice', 'ticketCapacity');
+        unset($this->ticketTypes);
+    }
+
     public function delete(): void
     {
         abort_unless($this->event->isOwnedBy(auth()->user()), 403);
@@ -78,4 +118,47 @@ new #[Title('イベントを編集')] class extends Component {
             </div>
         </div>
     </form>
+
+    <flux:separator />
+
+    <section class="space-y-4">
+        <flux:heading size="lg">券種</flux:heading>
+
+        @if ($this->ticketTypes->isEmpty())
+            <flux:text>券種はまだありません。</flux:text>
+        @else
+            <div class="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table class="w-full text-sm">
+                    <thead class="bg-zinc-50 text-left text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                        <tr>
+                            <th class="px-4 py-2 font-medium">名前</th>
+                            <th class="px-4 py-2 text-right font-medium">価格</th>
+                            <th class="px-4 py-2 text-right font-medium">定員</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                        @foreach ($this->ticketTypes as $ticketType)
+                            <tr wire:key="ticket-type-{{ $ticketType->id }}">
+                                <td class="px-4 py-2">{{ $ticketType->name }}</td>
+                                <td class="px-4 py-2 text-right">{{ number_format($ticketType->price) }}円</td>
+                                <td class="px-4 py-2 text-right">{{ number_format($ticketType->capacity) }}名</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
+        <form wire:submit="addTicketType" class="space-y-4">
+            <div class="grid gap-4 sm:grid-cols-3">
+                <flux:input wire:model="ticketName" label="券種名" placeholder="一般" />
+                <flux:input wire:model="ticketPrice" label="価格（円）" type="number" min="0" />
+                <flux:input wire:model="ticketCapacity" label="定員" type="number" min="1" />
+            </div>
+
+            <div class="flex justify-end">
+                <flux:button type="submit" variant="primary" icon="plus">券種を追加</flux:button>
+            </div>
+        </form>
+    </section>
 </div>
