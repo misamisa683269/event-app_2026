@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Event;
+use App\Models\TicketType;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -166,6 +167,110 @@ test('other users get 403 and cannot delete the event by calling delete directly
     $this->actingAs(User::factory()->create());
 
     $component->call('delete')->assertForbidden();
+
+    expect(Event::count())->toBe(1);
+});
+
+test('organizer can duplicate their event with a suffixed title and dates one week later', function () {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('duplicate');
+
+    $copy = Event::where('id', '!=', $event->id)->sole();
+
+    expect($copy)
+        ->user_id->toBe($event->user_id)
+        ->title->toBe($event->title.'（複製）')
+        ->description->toBe($event->description)
+        ->venue->toBe($event->venue)
+        ->and($copy->starts_at->toDateTimeString())->toBe($event->starts_at->copy()->addWeek()->toDateTimeString())
+        ->and($copy->ends_at->toDateTimeString())->toBe($event->ends_at->copy()->addWeek()->toDateTimeString())
+        ->and($event->fresh()->title)->toBe($event->title);
+});
+
+test('duplicating redirects to the edit page of the new event', function () {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    $component = Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('duplicate');
+
+    $copy = Event::where('id', '!=', $event->id)->sole();
+
+    $component->assertRedirect(route('events.edit', $copy));
+});
+
+test('duplicating does not copy ticket types', function () {
+    $event = Event::factory()->create();
+    TicketType::factory()->for($event)->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('duplicate');
+
+    $copy = Event::where('id', '!=', $event->id)->sole();
+
+    expect($copy->ticketTypes()->count())->toBe(0)
+        ->and($event->ticketTypes()->count())->toBe(1);
+});
+
+test('duplicated title stays within 100 characters', function () {
+    $event = Event::factory()->create(['title' => str_repeat('あ', 100)]);
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('duplicate');
+
+    $copy = Event::where('id', '!=', $event->id)->sole();
+
+    expect(mb_strlen($copy->title))->toBe(100)
+        ->and($copy->title)->toEndWith('（複製）');
+});
+
+test('other users get 403 and cannot duplicate the event by calling duplicate directly', function () {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    $component = Livewire::test('pages::events.edit', ['event' => $event]);
+
+    $this->actingAs(User::factory()->create());
+
+    $component->call('duplicate')->assertForbidden();
+
+    expect(Event::count())->toBe(1);
+});
+
+test('the edit page shows the duplicated message after duplicating', function () {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('duplicate');
+
+    $copy = Event::where('id', '!=', $event->id)->sole();
+
+    $this->get(route('events.edit', $copy))->assertSee('イベントを複製しました。');
+});
+
+test('the duplicated event is owned by the user who duplicated it', function () {
+    $event = Event::factory()->create();
+    $this->actingAs($event->user);
+
+    Livewire::test('pages::events.edit', ['event' => $event])
+        ->call('duplicate');
+
+    $copy = Event::where('id', '!=', $event->id)->sole();
+
+    expect($copy->isOwnedBy($event->user))->toBeTrue()
+        ->and($event->fresh()->isOwnedBy($event->user))->toBeTrue();
+});
+
+test('guests cannot duplicate an event', function () {
+    $event = Event::factory()->create();
+
+    Livewire::test('pages::events.edit', ['event' => $event])->assertForbidden();
 
     expect(Event::count())->toBe(1);
 });
